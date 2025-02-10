@@ -8,6 +8,7 @@ const {
     Routes,
     SlashCommandBuilder,
     EmbedBuilder,
+    ActivityType
 } = require("discord.js");
 const { google } = require("googleapis");
 const cron = require("node-cron");
@@ -305,6 +306,15 @@ async function registerCommands(clientId, guildId = null) {
 // Once the bot is ready (logged in successfully), we register commands and fetch data.
 client.once("ready", async () => {
     console.log(`Logged in as ${client.user.tag}.`);
+    
+    client.user.setPresence({
+        status: "online", // 'idle', 'dnd', or 'invisible' also possible
+        activities: [{
+        name: "ELITE REPRESENTATION FOR ELITE GAMERS",
+        type: ActivityType.Playing,
+        }],
+    });
+    
     await registerCommands(client.user.id);
 
     // Fetch data initially from Google Sheets to populate scheduleCache.
@@ -312,10 +322,17 @@ client.once("ready", async () => {
 
     // Schedule a cron job to refresh data every 2 hours (0 */2 * * *).
     // Adjust the schedule as needed.
-    cron.schedule("0 */2 * * *", async () => {
+    console.log("Scheduling cron timer: " , process.env.CRONTIMER)
+    cron.schedule(process.env.CRONTIMER, async () => {
         console.log("Cron job: refreshing schedule data...");
         await fetchScheduleData();
         sendScheduledReminders();
+    });
+
+    console.log("Scheduling cron cache refresh timer: " , process.env.REFRESHTIMER)
+    cron.schedule(process.env.REFRESHTIMER, async () => {
+        console.log("Cron job: refreshing schedule cache...");
+        await fetchScheduleData();
     });
 });
 
