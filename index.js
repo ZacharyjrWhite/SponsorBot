@@ -415,7 +415,7 @@ client.on("interactionCreate", async (interaction) => {
         // Only let admins or members with the "SponsorBot" role (case-insensitive) use this command.
         const isAdmin = member.permissions.has(PermissionsBitField.Flags.Administrator);
         const isMod = member.roles.cache.some(
-            (role) => role.name.toLowerCase() === "sponsorbot"
+            (role) => role.name.toLowerCase() === process.env.ROLE
         );
 
         // If not allowed, reply with an ephemeral (invisible) error message.
