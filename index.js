@@ -172,8 +172,6 @@ function getStatusColor(STATUS) {
  * Only include rows where:
  *   - shouldNotify == "1"
  *   - ignore == "0"
- *
- * (Status check removed per new requirement #3.)
  */
 function createEmbedsFromData(items) {
     const validItems = items.filter(
@@ -232,6 +230,7 @@ function createScheduleEmbeds(guildId, monthFilter = "All") {
 /************************************************
  * 7) Slash Command Registration
  ************************************************/
+// We add a second command here: /refresh
 const commands = [
     new SlashCommandBuilder()
         .setName("schedule")
@@ -242,6 +241,9 @@ const commands = [
                 .setDescription('Month name (e.g. "January") or "All"')
                 .setRequired(false)
         ),
+    new SlashCommandBuilder()
+        .setName("refresh")
+        .setDescription("Refresh the schedule data from Google Sheets."),
 ].map((cmd) => cmd.toJSON());
 
 async function registerCommands(clientId, guildId = null) {
@@ -272,9 +274,7 @@ client.once("ready", async () => {
 
     await registerCommands(client.user.id);
     await fetchScheduleData();
-
     sendScheduledReminders();
-    
     // CRON to refresh data and then send reminders
     console.log("Scheduling cron timer:", process.env.CRONTIMER);
     cron.schedule(process.env.CRONTIMER, async () => {
@@ -294,10 +294,6 @@ client.once("ready", async () => {
 /************************************************
  * 9) sendScheduledReminders()
  ************************************************/
-/**
- * Sends reminder messages for each guild, grouping items by channel, but only
- * if shouldNotify == "1" and ignore == "0".
- */
 async function sendScheduledReminders() {
     try {
         const guildIds = Object.keys(scheduleCache);
@@ -332,7 +328,6 @@ async function sendScheduledReminders() {
                     continue;
                 }
 
-                // Build list of embeds per the new filter logic (shouldNotify=1 & ignore=0).
                 const embedList = createEmbedsFromData(items);
                 if (!embedList.length) continue;
 
@@ -353,15 +348,15 @@ async function sendScheduledReminders() {
 client.on("interactionCreate", async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
+    const member = interaction.member;
+    const isAdmin = member.permissions.has(PermissionsBitField.Flags.Administrator);
+    const isMod = member.roles.cache.some(
+        (role) => role.name.toLowerCase() === process.env.ROLE
+    );
+
+    // Handle /schedule
     if (interaction.commandName === "schedule") {
-        const member = interaction.member;
-        const guildId = interaction.guildId;
-
-        const isAdmin = member.permissions.has(PermissionsBitField.Flags.Administrator);
-        const isMod = member.roles.cache.some(
-            (role) => role.name.toLowerCase() === process.env.ROLE
-        );
-
+        // Permission check
         if (!isAdmin && !isMod) {
             return interaction.reply({
                 content: "You do not have permission to use this command!",
@@ -369,7 +364,7 @@ client.on("interactionCreate", async (interaction) => {
             });
         }
 
-        // Only allowed in channels that appear in the scheduleCache.
+        const guildId = interaction.guildId;
         const guildData = scheduleCache[guildId] || [];
         const validChannels = guildData
             .map((item) => String(item.channel).trim().toLowerCase())
@@ -407,15 +402,41 @@ client.on("interactionCreate", async (interaction) => {
                 ephemeral: false,
             });
         } catch (err) {
-            console.error("Error handling slash command:", err);
+            console.error("Error handling /schedule command:", err);
             if (interaction.replied || interaction.deferred) {
                 await interaction.followUp(
                     "An error occurred while processing your request."
                 );
             } else {
-                await interaction.reply(
-                    "An error occurred while processing your request."
+                await interaction.reply("An error occurred while processing your request.");
+            }
+        }
+    }
+
+    // Handle /refresh
+    if (interaction.commandName === "refresh") {
+        // Permission check
+        if (!isAdmin && !isMod) {
+            return interaction.reply({
+                content: "You do not have permission to use this command!",
+                ephemeral: true,
+            });
+        }
+
+        try {
+            await fetchScheduleData();
+            await interaction.reply({
+                content: "Schedule data has been refreshed from Google Sheets.",
+                ephemeral: true,
+            });
+        } catch (err) {
+            console.error("Error handling /refresh command:", err);
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp(
+                    "An error occurred while refreshing the schedule data."
                 );
+            } else {
+                await interaction.reply("An error occurred while refreshing the schedule data.");
             }
         }
     }
