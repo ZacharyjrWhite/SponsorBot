@@ -184,8 +184,10 @@ function createEmbedsFromData(items) {
             .setTitle(`Sponsor: ${item.sponsor}`)
             .addFields(
                 { name: "Status", value: item.status, inline: false },
-                { name: "Draft Deadline", value: item.draftDeadline, inline: false },
-                { name: "Upload Deadline", value: item.uploadDeadline, inline: false }
+                { name: "Draft Deadline", value: item.draftDeadline.replace("R", "D"), inline: false },
+                { name: " ", value: item.draftDeadline, inline: false },
+                { name: "Upload Deadline", value: item.uploadDeadline.replace("R", "D"), inline: false },
+                { name: " ", value: item.uploadDeadline, inline: false },
             );
     });
 }
@@ -205,8 +207,10 @@ function createEmbedsIgnoreNotify(items) {
             .setTitle(`Sponsor: ${item.sponsor}`)
             .addFields(
                 { name: "Status", value: item.status, inline: false },
-                { name: "Draft Deadline", value: item.draftDeadline, inline: false },
-                { name: "Upload Deadline", value: item.uploadDeadline, inline: false }
+                { name: "Draft Deadline", value: item.draftDeadline.replace("R", "D"), inline: false },
+                { name: " ", value: item.draftDeadline, inline: false },
+                { name: "Upload Deadline", value: item.uploadDeadline.replace("R", "D"), inline: false },
+                { name: " ", value: item.uploadDeadline, inline: false },
             );
     });
 }
@@ -288,6 +292,11 @@ client.once("ready", async () => {
     cron.schedule(process.env.REFRESHTIMER, async () => {
         console.log("Cron job: refreshing schedule cache...");
         await fetchScheduleData();
+    });
+
+    console.log("Clearing Console:", process.env.REFRESHTIMER);
+    cron.schedule(process.env.REFRESHTIMER, async () => {
+        console.clear() 
     });
 });
 
