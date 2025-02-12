@@ -79,9 +79,12 @@ async function fetchScheduleData() {
         const colDraftDeadline = header.indexOf("Draft Deadline - Disc. Date");
         const colUploadDeadline = header.indexOf("Upload Deadline - Disc. Date");
         const colMonth = header.indexOf("Month");
+        const colYear = header.indexOf("Year");
         const colShouldNotify = header.indexOf("Should Notify");
         const colStatus = header.indexOf("status");
+        const colStatusSend = header.indexOf("Status Send");
         const colIgnore = header.indexOf("ignore");
+        const colType = header.indexOf("Type");
 
         scheduleCache = {};
 
@@ -95,9 +98,12 @@ async function fetchScheduleData() {
             const draftDeadline = row[colDraftDeadline] || "N/A";
             const uploadDeadline = row[colUploadDeadline] || "N/A";
             const month = row[colMonth] || "N/A";
+            const year = row[colYear] || "N/A";
             const shouldNotify = row[colShouldNotify] || "1";
             const status = row[colStatus].trim();
+            const statusSend = row[colStatusSend].trim();
             const ignore = row[colIgnore].trim();
+            const type = row[colType].trim();
 
             const currentRowNumber = index;
 
@@ -116,6 +122,9 @@ async function fetchScheduleData() {
                 status,
                 currentRowNumber,
                 ignore,
+                statusSend,
+                type,
+                year
             });
         }
 
@@ -175,7 +184,7 @@ function getStatusColor(STATUS) {
  */
 function createEmbedsFromData(items) {
     const validItems = items.filter(
-        (i) => i.shouldNotify === "1" && i.ignore === "0"
+        (i) => i.shouldNotify === "1" && i.ignore === "0" && i.statusSend === '1'
     );
 
     return validItems.map((item) => {
@@ -234,7 +243,6 @@ function createScheduleEmbeds(guildId, monthFilter = "All") {
 /************************************************
  * 7) Slash Command Registration
  ************************************************/
-// We add a second command here: /refresh
 const commands = [
     new SlashCommandBuilder()
         .setName("schedule")
@@ -248,6 +256,9 @@ const commands = [
     new SlashCommandBuilder()
         .setName("refresh")
         .setDescription("Refresh the schedule data from Google Sheets."),
+    new SlashCommandBuilder()
+        .setName("resend")
+        .setDescription("Force a resend of notifications, incase changes have been made."),
 ].map((cmd) => cmd.toJSON());
 
 async function registerCommands(clientId, guildId = null) {
@@ -446,6 +457,30 @@ client.on("interactionCreate", async (interaction) => {
                 );
             } else {
                 await interaction.reply("An error occurred while refreshing the schedule data.");
+            }
+        }
+    }
+
+    if (interaction.commandName === "resend") {
+        // Permission check
+        if (!isAdmin && !isMod) {
+            return interaction.reply({
+                content: "You do not have permission to use this command!",
+                ephemeral: true,
+            });
+        }
+
+        try {
+            await fetchScheduleData();
+            sendScheduledReminders();
+        } catch (err) {
+            console.error("Error handling /resend command:", err);
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp(
+                    "An error occurred while resending the schedule data."
+                );
+            } else {
+                await interaction.reply("An error occurred while resending the schedule data.");
             }
         }
     }
