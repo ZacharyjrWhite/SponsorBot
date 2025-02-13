@@ -83,12 +83,15 @@ async function fetchScheduleData() {
         const colShouldNotify = header.indexOf("Should Notify");
         const colStatus = header.indexOf("status");
         const colStatusSend = header.indexOf("Status Send");
+        const colStatusMessage = header.indexOf("Status Message");
         const colIgnore = header.indexOf("ignore");
         const colType = header.indexOf("Type");
 
+        // Reset the global cache
         scheduleCache = {};
 
         for (const [index, row] of dataRows.entries()) {
+            // Minimal validation
             if (!row[colGuildId] || !row[colChannel]) continue;
 
             const guildId = row[colGuildId].trim();
@@ -100,10 +103,16 @@ async function fetchScheduleData() {
             const month = row[colMonth] || "N/A";
             const year = row[colYear] || "N/A";
             const shouldNotify = row[colShouldNotify] || "1";
-            const status = row[colStatus].trim();
-            const statusSend = row[colStatusSend].trim();
-            const ignore = row[colIgnore].trim();
-            const type = row[colType].trim();
+
+            const status = (row[colStatus] || "").trim();
+            const statusSend = (row[colStatusSend] || "").trim();
+
+            // Safely handle statusMessage
+            let rawStatusMsg = row[colStatusMessage] || "";
+            const statusMessage = typeof rawStatusMsg === "string" ? rawStatusMsg.trim() : "";
+
+            const ignore = (row[colIgnore] || "").trim();
+            const type = (row[colType] || "").trim();
 
             const currentRowNumber = index;
 
@@ -118,13 +127,14 @@ async function fetchScheduleData() {
                 draftDeadline,
                 uploadDeadline,
                 month,
+                year,
                 shouldNotify,
                 status,
-                currentRowNumber,
-                ignore,
                 statusSend,
+                statusMessage,
+                ignore,
                 type,
-                year
+                currentRowNumber
             });
         }
 
@@ -162,13 +172,13 @@ function getRandomColor() {
 function getStatusColor(STATUS) {
     switch (STATUS.toLowerCase()) {
         case "pending":
-            return `e82020`;
+            return "e82020";
         case "draft":
-            return `e8db20`;
+            return "e8db20";
         case "complete":
-            return `63e820`;
+            return "63e820";
         default:
-            return `e8db20`;
+            return "e8db20";
     }
 }
 
@@ -181,23 +191,40 @@ function getStatusColor(STATUS) {
  * Only include rows where:
  *   - shouldNotify == "1"
  *   - ignore == "0"
+ *   - statusSend == "1"
  */
 function createEmbedsFromData(items) {
     const validItems = items.filter(
-        (i) => i.shouldNotify === "1" && i.ignore === "0" && i.statusSend === '1'
+        (i) => i.shouldNotify === "1" && i.ignore === "0" && i.statusSend === "1"
     );
 
     return validItems.map((item) => {
+        // Build the fields array dynamically
+        const fields = [
+            { name: "Status", value: item.status, inline: false },
+        ];
+
+        // Only add "Message" if statusMessage is non-empty
+        if (item.statusMessage) {
+            fields.push({ name: "Message", value: item.statusMessage, inline: false });
+        }
+
+        // Only add "Type" if it's non-empty
+        if (item.type) {
+            fields.push({ name: "Type", value: item.type, inline: false });
+        }
+
+        fields.push(
+            { name: "Draft Deadline", value: item.draftDeadline.replace("R", "D"), inline: false },
+            { name: " ", value: item.draftDeadline, inline: false },
+            { name: "Upload Deadline", value: item.uploadDeadline.replace("R", "D"), inline: false },
+            { name: " ", value: item.uploadDeadline, inline: false },
+        );
+
         return new EmbedBuilder()
             .setColor(getStatusColor(item.status))
             .setTitle(`Sponsor: ${item.sponsor}`)
-            .addFields(
-                { name: "Status", value: item.status, inline: false },
-                { name: "Draft Deadline", value: item.draftDeadline.replace("R", "D"), inline: false },
-                { name: " ", value: item.draftDeadline, inline: false },
-                { name: "Upload Deadline", value: item.uploadDeadline.replace("R", "D"), inline: false },
-                { name: " ", value: item.uploadDeadline, inline: false },
-            );
+            .addFields(fields);
     });
 }
 
@@ -211,30 +238,62 @@ function createEmbedsIgnoreNotify(items) {
     if (!validItems.length) return [];
 
     return validItems.map((item) => {
+        // Build the fields array dynamically
+        const fields = [
+            { name: "Status", value: item.status, inline: false },
+        ];
+
+        // Only add "Message" if statusMessage is non-empty
+        if (item.statusMessage) {
+            fields.push({ name: "Message", value: item.statusMessage, inline: false });
+        }
+
+        // Only add "Type" if it's non-empty
+        if (item.type) {
+            fields.push({ name: "Type", value: item.type, inline: false });
+        }
+
+        fields.push(
+            { name: "Draft Deadline", value: item.draftDeadline.replace("R", "D"), inline: false },
+            { name: " ", value: item.draftDeadline, inline: false },
+            { name: "Upload Deadline", value: item.uploadDeadline.replace("R", "D"), inline: false },
+            { name: " ", value: item.uploadDeadline, inline: false }
+        );
+
         return new EmbedBuilder()
             .setColor(getStatusColor(item.status))
             .setTitle(`Sponsor: ${item.sponsor}`)
-            .addFields(
-                { name: "Status", value: item.status, inline: false },
-                { name: "Draft Deadline", value: item.draftDeadline.replace("R", "D"), inline: false },
-                { name: " ", value: item.draftDeadline, inline: false },
-                { name: "Upload Deadline", value: item.uploadDeadline.replace("R", "D"), inline: false },
-                { name: " ", value: item.uploadDeadline, inline: false },
-            );
+            .addFields(fields);
     });
 }
 
-function createScheduleEmbeds(guildId, monthFilter = "All") {
+/**
+ * createScheduleEmbeds(guildId, monthFilter = "All", yearFilter = "All"):
+ *   - Filters out any items that are ignored.
+ *   - If monthFilter != 'All', item.month must match.
+ *   - If yearFilter != 'All', item.year must match.
+ */
+function createScheduleEmbeds(guildId, monthFilter = "All", yearFilter = "All") {
     const guildData = scheduleCache[guildId] || [];
     if (!guildData.length) {
         return [];
     }
 
-    const normalizedFilter = monthFilter.toLowerCase();
+    // Convert user input to lowercase for comparisons
+    const monthLower = monthFilter.toLowerCase();
+    const yearLower = yearFilter.toLowerCase();
 
+    // Filter by month/year only if not "all"
     const filteredData = guildData.filter((item) => {
-        if (normalizedFilter === "all") return true;
-        return item.month.toLowerCase() === normalizedFilter;
+        if (item.ignore === "1") return false;
+
+        const monthMatches =
+            monthLower === "all" || item.month.toLowerCase() === monthLower;
+
+        const yearMatches =
+            yearLower === "all" || item.year.toLowerCase() === yearLower;
+
+        return monthMatches && yearMatches;
     });
 
     return createEmbedsIgnoreNotify(filteredData);
@@ -252,13 +311,19 @@ const commands = [
                 .setName("month")
                 .setDescription('Month name (e.g. "January") or "All"')
                 .setRequired(false)
+        )
+        .addStringOption((option) =>
+            option
+                .setName("year")
+                .setDescription('Year (e.g. "2023") or "All"')
+                .setRequired(false)
         ),
     new SlashCommandBuilder()
         .setName("refresh")
         .setDescription("Refresh the schedule data from Google Sheets."),
     new SlashCommandBuilder()
         .setName("resend")
-        .setDescription("Force a resend of notifications, incase changes have been made."),
+        .setDescription("Force a resend of notifications, in case changes have been made."),
 ].map((cmd) => cmd.toJSON());
 
 async function registerCommands(clientId, guildId = null) {
@@ -289,7 +354,9 @@ client.once("ready", async () => {
 
     await registerCommands(client.user.id);
     await fetchScheduleData();
-    sendScheduledReminders();
+    // Optionally start reminders immediately:
+    // sendScheduledReminders();
+
     // CRON to refresh data and then send reminders
     console.log("Scheduling cron timer:", process.env.CRONTIMER);
     cron.schedule(process.env.CRONTIMER, async () => {
@@ -305,9 +372,10 @@ client.once("ready", async () => {
         await fetchScheduleData();
     });
 
+    // Clear console on the same timer
     console.log("Clearing Console:", process.env.REFRESHTIMER);
     cron.schedule(process.env.REFRESHTIMER, async () => {
-        console.clear() 
+        console.clear();
     });
 });
 
@@ -328,6 +396,7 @@ async function sendScheduledReminders() {
                 continue;
             }
 
+            // Group items by channel
             const dataByChannel = {};
             for (const item of guildData) {
                 const chanKey = item.channel;
@@ -376,7 +445,6 @@ client.on("interactionCreate", async (interaction) => {
 
     // Handle /schedule
     if (interaction.commandName === "schedule") {
-        // Permission check
         if (!isAdmin && !isMod) {
             return interaction.reply({
                 content: "You do not have permission to use this command!",
@@ -384,12 +452,16 @@ client.on("interactionCreate", async (interaction) => {
             });
         }
 
+        // #1 Identify the guild data
         const guildId = interaction.guildId;
         const guildData = scheduleCache[guildId] || [];
+
+        // #2 Build a list of valid channels from the spreadsheet
         const validChannels = guildData
             .map((item) => String(item.channel).trim().toLowerCase())
             .filter(Boolean);
 
+        // #3 Check if the user is in a valid channel
         const currentChannelName = interaction.channel?.name?.toLowerCase() || "";
         const currentChannelId = interaction.channel?.id;
 
@@ -405,21 +477,28 @@ client.on("interactionCreate", async (interaction) => {
         }
 
         try {
+            // #4 Parse any user-provided filters
             const monthArg = interaction.options.getString("month") || "All";
-            const embeds = createScheduleEmbeds(guildId, monthArg);
+            const yearArg = interaction.options.getString("year") || "All";
 
+            // #5 Filter the data using createScheduleEmbeds
+            //    (which shows rows ignoring shouldNotify, etc.)
+            const embeds = createScheduleEmbeds(guildId, monthArg, yearArg);
+
+            // #6 If there's nothing after filtering, inform the user
             if (!embeds.length) {
                 await interaction.reply({
-                    content: `No schedule data found for month "${monthArg}".`,
-                    ephemeral: false,
+                    content: `No schedule data found for month "${monthArg}" and year "${yearArg}".`,
+                    ephemeral: true,
                 });
                 return;
             }
 
+            // #7 Otherwise, show the result
             await interaction.reply({
-                content: `Showing schedule for month: **${monthArg}**`,
+                content: `Showing schedule for Month: **${monthArg}**, Year: **${yearArg}**`,
                 embeds: embeds,
-                ephemeral: false,
+                ephemeral: true,
             });
         } catch (err) {
             console.error("Error handling /schedule command:", err);
@@ -435,7 +514,6 @@ client.on("interactionCreate", async (interaction) => {
 
     // Handle /refresh
     if (interaction.commandName === "refresh") {
-        // Permission check
         if (!isAdmin && !isMod) {
             return interaction.reply({
                 content: "You do not have permission to use this command!",
@@ -461,8 +539,8 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
+    // Handle /resend
     if (interaction.commandName === "resend") {
-        // Permission check
         if (!isAdmin && !isMod) {
             return interaction.reply({
                 content: "You do not have permission to use this command!",
@@ -473,6 +551,10 @@ client.on("interactionCreate", async (interaction) => {
         try {
             await fetchScheduleData();
             sendScheduledReminders();
+            await interaction.reply({
+                content: "Schedule data has been re-fetched and reminders have been resent.",
+                ephemeral: true,
+            });
         } catch (err) {
             console.error("Error handling /resend command:", err);
             if (interaction.replied || interaction.deferred) {
