@@ -371,6 +371,12 @@ client.once("ready", async () => {
         console.log("Cron job: refreshing schedule cache...");
         await fetchScheduleData();
     });
+    
+    // Runs every 5 minutes
+    cron.schedule('*/5 * * * *', () => {
+      console.log('Re-loading environment variables...');
+      require('dotenv').config();
+    });
 
     // Clear console on the same timer
     console.log("Clearing Console:", process.env.REFRESHTIMER);
