@@ -480,8 +480,8 @@ client.once("ready", async () => {
 
     // If REFRESHTIMER is set, we can optionally clear the console on that schedule
     if (currentExpressions.refresh) {
-      cron.schedule("*/20 * * * *", () => {
-        //console.clear();
+      cron.schedule("*/30 * * * *", () => {
+        console.clear();
       });
     }
 });
@@ -614,12 +614,12 @@ client.on("interactionCreate", async (interaction) => {
 
     // /schedule
     if (interaction.commandName === "schedule") {
-        if (!isAdmin && !isMod) {
-            return interaction.reply({
-                content: "You do not have permission to use this command!",
-                ephemeral: true,
-            });
-        }
+        //if (!isAdmin && !isMod) {
+        //    return interaction.reply({
+        //        content: "You do not have permission to use this command!",
+        //        ephemeral: true,
+        //    });
+        //}
 
         const guildId = interaction.guildId;
         const guildData = scheduleCache[guildId] || [];
@@ -661,7 +661,7 @@ client.on("interactionCreate", async (interaction) => {
             await interaction.reply({
                 content: `Showing schedule for Month: **${monthArg}**, Year: **${yearArg}**`,
                 embeds: embeds,
-                ephemeral: true,
+                ephemeral: false,
             });
         } catch (err) {
             console.error("Error handling /schedule command:", err);
