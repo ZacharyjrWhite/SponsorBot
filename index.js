@@ -108,7 +108,7 @@ async function fetchScheduleData() {
         const colGuildId = header.indexOf("guild ID");
         const colCreator = header.indexOf("Creator");
         const colChannel = header.indexOf("Channel");
-        const colSponsor = header.indexOf("Sponsor");
+        const colSponsor = header.indexOf("Brand");
         const colDraftDeadline = header.indexOf("Draft Deadline - Disc. Date");
         const colUploadDeadline = header.indexOf("Upload Deadline - Disc. Date");
         const colMonth = header.indexOf("Month");
@@ -467,7 +467,7 @@ client.once("ready", async () => {
     await fetchScheduleData();
 
     // Optionally do an immediate round of reminders if you want
-    sendScheduledReminders();
+    //sendScheduledReminders();
 
     // Set up the cron tasks based on environment
     initCronJobs();
@@ -481,7 +481,7 @@ client.once("ready", async () => {
     // If REFRESHTIMER is set, we can optionally clear the console on that schedule
     if (currentExpressions.refresh) {
       cron.schedule("*/20 * * * *", () => {
-        console.clear();
+        //console.clear();
       });
     }
 });
