@@ -269,15 +269,37 @@ function buildEmbedForItem(item) {
  * shouldNotify=1, ignore=0, statusSend=1,
  * AND either reminderDate or reminderDate2 equals today's date
  */
+
+let didMonthlyOverride = false;
+
 function filterReminderItems(guildData) {
     const today = getCurrentDateFormatted();
-    return guildData.filter(item =>
-        item.shouldNotify === "1" &&
-        item.ignore === "0" &&
-        item.statusSend === "1" &&
-        (item.reminderDate === today || item.reminderDate2 === today)
+    const currentDay = new Date().getDate();
+
+    // If it's the 1st, OR it's the 2nd and we haven't done the monthly override yet
+    if (!didMonthlyOverride && (currentDay === 1 || currentDay === 2)) {
+        // Mark that we've used our monthly override so it doesn't repeat
+        didMonthlyOverride = true;
+
+        // Return "all" the items that normally would get reminders
+        return guildData.filter(
+            item =>
+                item.shouldNotify === "1" &&
+                item.ignore === "0" &&
+                item.statusSend === "1"
+        );
+    }
+
+    // Otherwise, keep the existing date match logic
+    return guildData.filter(
+        item =>
+            item.shouldNotify === "1" &&
+            item.ignore === "0" &&
+            item.statusSend === "1" &&
+            (item.reminderDate === today || item.reminderDate2 === today)
     );
 }
+
 
 /************************************************
  * 6C) createScheduleEmbeds - for the /schedule command
@@ -467,7 +489,7 @@ client.once("ready", async () => {
     await fetchScheduleData();
 
     // Optionally do an immediate round of reminders if you want
-    //sendScheduledReminders();
+    sendScheduledReminders();
 
     // Set up the cron tasks based on environment
     initCronJobs();
